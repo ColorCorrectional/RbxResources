@@ -1,2 +1,4 @@
-# Projects
-Work that I have created that should be saved is stored here.
+# RbxProjects
+
+A collection of utility modules and functions.
+
