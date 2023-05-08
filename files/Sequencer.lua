@@ -45,7 +45,7 @@ end
 function sequencer:addThreadToSequence(name: string, func: thread, config: config): (...any) -> (...any)
 	self._threads[name] = {
 		func = func,
-		config = config
+		config = config or {}
 	} :: _thread
 	
 	return function(...)
