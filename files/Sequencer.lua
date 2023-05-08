@@ -1,7 +1,7 @@
 ---!strict
 
 type config = {
-	once: boolean?
+	once: boolean? -- Only runs the sequence once then removes it
 }
 
 type _thread = {
@@ -28,33 +28,33 @@ end
 
 function sequencer:runSequence(name: string, ...: any): ...any
 	local thread: _thread = self._threads[name]
-	if not thread then return print('Invalid thread', name) end
-	
-	local runningCoroutine = coroutine.running()
+	if not thread then return end
+
+	local runningCoroutine = coroutine.running() -- Gets the current environment
 	
 	task.defer(function(...)
 		if thread.config.once then
 			self:removeThreadFromSequence(name)
 		end
-		task.spawn(runningCoroutine, thread.func(...))
+		task.spawn(runningCoroutine, thread.func(...)) -- Runs the sequence function then resumes the callers environment.
 	end, ...)
 	
-	return coroutine.yield()
+	return coroutine.yield() -- Yields the environment from where it has been called.
 end
 
-function sequencer:addThreadToSequence(name: string, func: thread, config: config): (...any) -> (...any)
+function sequencer:removeThreadFromSequence(name: string)
+	self._threads[name] = nil
+end
+
+function sequencer:addThreadToSequence(name: string, func: thread, config: config?): (...any) -> (...any)
 	self._threads[name] = {
 		func = func,
 		config = config or {}
 	} :: _thread
 	
-	return function(...)
+	return function(...) -- Allowes you to run the thread without doing the string method through `self:runSequence`
 		return self:runSequence(name, ...)
 	end
-end
-
-function sequencer:removeThreadFromSequence(name: string)
-	self._threads[name] = nil
 end
 
 return new
