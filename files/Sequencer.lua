@@ -1,7 +1,7 @@
----!strict
+--!strict
 
 type config = {
-	once: boolean? -- Only runs the sequence once then removes it
+	once: boolean? -- runs once then removes the thread.
 }
 
 type _thread = {
@@ -22,38 +22,62 @@ sequencer.__index = sequencer
 
 local function new()
 	return setmetatable({
-		_threads = {} :: {[string]: _thread}
+		_threads = {} :: {[string]: _thread},
 	}, sequencer)
 end
 
-function sequencer:runSequence(name: string, ...: any): ...any
-	local thread: _thread = self._threads[name]
-	if not thread then return end
-
-	local runningCoroutine = coroutine.running() -- Gets the current environment
+local function _run(taskfunc: (thread) -> ()): ...any
+	local enviroment = coroutine.running()
 	
-	task.defer(function(...)
+	task.defer(function()
+		taskfunc(enviroment)
+	end)
+	
+	return coroutine.yield()
+end
+
+function sequencer:runSequenceWithDelay(name: string, delayTime: number, args: {any}): ...any
+	local thread: _thread = self._threads[name]
+	
+	if not thread then return end
+	args = args or {}
+	
+	return _run(function(enviroment)
+		task.delay(delayTime, function()
+			if thread.config.once then
+				self:removeThreadFromSequence(name)
+			end
+			task.spawn(enviroment, thread.func(unpack(args)))
+		end)
+	end)
+end
+
+function sequencer:runSequence(name: string, args: {any}): ...any
+	local thread: _thread = self._threads[name]
+	
+	if not thread then return end
+	args = args or {}
+	
+	return _run(function(enviroment)
 		if thread.config.once then
 			self:removeThreadFromSequence(name)
 		end
-		task.spawn(runningCoroutine, thread.func(...)) -- Runs the sequence function then resumes the callers environment.
-	end, ...)
-	
-	return coroutine.yield() -- Yields the environment from where it has been called.
+		task.spawn(enviroment, thread.func(unpack(args)))
+	end)
 end
 
 function sequencer:removeThreadFromSequence(name: string)
 	self._threads[name] = nil
 end
 
-function sequencer:addThreadToSequence(name: string, func: thread, config: config?): (...any) -> (...any)
+function sequencer:addThreadToSequence(name: string, func: thread, config: config?): ({any}) -> (...any?)
 	self._threads[name] = {
 		func = func,
 		config = config or {}
-	} :: _thread
+	}
 	
-	return function(...) -- Allowes you to run the thread without doing the string method through `self:runSequence`
-		return self:runSequence(name, ...)
+	return function(args: {any})
+		return self:runSequence(name, args)
 	end
 end
 
