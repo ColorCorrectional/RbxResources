@@ -28,10 +28,7 @@ end
 
 local function _run(taskfunc: (thread) -> ()): ...any
 	local enviroment = coroutine.running()
-	
-	task.defer(function()
-		taskfunc(enviroment)
-	end)
+	task.defer(taskfunc, enviroment)
 	
 	return coroutine.yield()
 end
