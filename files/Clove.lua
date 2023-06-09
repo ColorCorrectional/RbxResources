@@ -29,7 +29,7 @@ local function GetErrorContext(s: ErrorContexts, ...)
 end
 
 local function CreateError(message: ErrorContexts, ...)
-	error(GetErrorContext(message))
+	error(GetErrorContext(message, ...))
 end
 
 local function GetObjectCleanMethod(objectType, cleanMethod)
@@ -87,9 +87,9 @@ Clove.__index = Clove
 ]]
 function Clove:Add<T>(object: T, cleanupMethod: string?)
 	if self._cleaning then 
-		CreateError('#cleaning') 
+		CreateError('#cleaning')
 	end
-	table.insert(self._objects, {object, GetObjectCleanMethod(typeof(object), cleanupMethod)})
+	table.insert(self._objects, {object, GetObjectCleanMethod(type(object), cleanupMethod)})
 	return object
 end
 
@@ -168,7 +168,7 @@ function Clove:Construct<T>(class: T, cleanMethod: string?, ...)
 	if self._cleaning then
 		CreateError('#cleaning')
 	end
-	local classType = typeof(class)
+	local classType = type(class)
 	
 	if classType == 'table' then
 		class = class.new(...)
