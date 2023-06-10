@@ -12,7 +12,6 @@ type CombindOptions = {
 
 type ErrorOptions = {
 	Error: string?,
-	Trace: string?,
 	Type: string?,
 	Context: string?,
 }
@@ -37,7 +36,7 @@ local Error = {
 Error.new = function(options: ErrorOptions)
 	options = {
 		Error = if options.Error then `Clove:{debug.info(3, 'l')}: "{options.Error}"` else nil,
-		Trace = options.Trace,
+		Trace = debug.traceback(nil, 1),
 		Type = options.Type,
 		Context = options.Context or '',
 	}
@@ -45,7 +44,7 @@ Error.new = function(options: ErrorOptions)
 	if not options.Error and options.Type then
 		options.Error = switch(options.Type, {
 			[Error.Type.Cleaning] = function()
-				return `Cannot use class while cleaning` 
+				return `Cannot access Clove while cleaning` 
 			end,
 		})
 	end
@@ -72,7 +71,6 @@ local function GetObjectCleanMethod(objectType, cleanMethod): typeof(Error) | st
 	end
 	return error(Error.new({
 		Error = `Unable to get cleanup function for object type({objectType})`,
-		Trace = debug.traceback(nil, 0),
 		Type = Error.Type.CleanMethod
 	}), 0)
 end
@@ -136,10 +134,7 @@ end
 ]]
 function Clove:BulkAdd<T>(objects: {T}, cleanMethod: string?)
 	if self._cleaning then 
-		return warn(Error.new({
-			Type = Error.Type.Cleaning,
-			Trace = debug.traceback(cleanMethod, 1)
-		}))
+		return warn(Error.new({Type = Error.Type.Cleaning}))
 	end
 
 	for _, obj in objects do
@@ -156,10 +151,7 @@ end
 ]]
 function Clove:Remove<object>(object: object): boolean
 	if self._cleaning then 
-		return warn(Error.new({
-			Trace = debug.traceback(nil, 1),
-			Type = Error.Type.Cleaning
-		}))
+		return warn(Error.new({Type = Error.Type.Cleaning}))
 	end
 	return findAndRemoveFromObjects(self._objects, object, true)
 end
@@ -172,10 +164,7 @@ end
 ]]
 function Clove:Clone<object>(instance: object & Instance): object
 	if self._cleaning then
-		return warn(Error.new({
-			Trace = debug.traceback(nil, 1),
-			Type = Error.Type.Cleaning
-		}))
+		return warn(Error.new({Type = Error.Type.Cleaning}))
 	end
 	return self:Add(instance:Clone())
 end
@@ -188,10 +177,7 @@ end
 ]]
 function Clove:Signal(signal, RBXCallSignal: 'Connect' | 'ConnectParallel' | string, fn: (...any) -> (...any)): RBXScriptConnection?
 	if self._cleaning then 
-		return warn(Error.new({
-			Trace = debug.traceback(nil, 1),
-			Type = Error.Type.Cleaning
-		}))
+		return warn(Error.new({Type = Error.Type.Cleaning}))
 	end
 	return self:Add(signal[RBXCallSignal](signal, fn))
 end
@@ -207,10 +193,7 @@ end
 ]]
 function Clove:Construct<T>(class: T, cleanMethod: string?, ...)
 	if self._cleaning then
-		return warn(Error.new({
-			Trace = debug.traceback(nil, 1),
-			Type = Error.Type.Cleaning
-		}))
+		return warn(Error.new({Type = Error.Type.Cleaning}))
 	end
 	local classType = type(class)
 
