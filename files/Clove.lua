@@ -3,13 +3,18 @@
 --[[
 	Clove
 	ColorCorrectional
-	9th June 2023
+	10th June 2023
 ]]
-
-type ErrorContexts = '#cleaning' | '#cleanupMethod' | string
 
 type CombindOptions = {
 	Transfer: boolean?
+}
+
+type ErrorOptions = {
+	Error: string?,
+	Trace: string?,
+	Type: string?,
+	Context: string?,
 }
 
 --[[
@@ -17,22 +22,43 @@ type CombindOptions = {
 	Backend helper methods for handling cleanup & errors
 ]]
 
-local function GetErrorContext(s: ErrorContexts, ...)
-	local scriptline, referenceName = debug.info(3, 'ln')
+local function switch<K>(key: K, cases: {[K]: () -> ()})
+	local case = cases[key]
+	if case then return case() end
+end
+
+local Error = {
+	Type = {
+		['Cleaning'] = 'Cleaning',
+		['CleanMethod'] = 'Cleaning Method'
+	},
+}
+
+Error.new = function(options: ErrorOptions)
+	options = {
+		Error = if options.Error then `Clove:{debug.info(3, 'l')}: "{options.Error}"` else nil,
+		Trace = options.Trace,
+		Type = options.Type,
+		Context = options.Context or '',
+	}
 	
-	if s == '#cleaning' then
-		return `Cannot Clove:{referenceName}() while cleaning`
-	elseif s == '#cleanupMethod' then
-		return `Unable to get cleanup function for object type({...})`
+	if not options.Error and options.Type then
+		options.Error = switch(options.Type, {
+			[Error.Type.Cleaning] = function()
+				return `Cannot use class while cleaning` 
+			end,
+		})
 	end
-	return `Clove:{scriptline}:{referenceName}: "{s}"`
+	
+	return table.concat({
+		`Clove.Error({options.Type or '?'})`,
+		options.Error or 'Unknown Error',
+		options.Trace,
+		options.Context
+	}, '\n\n')
 end
 
-local function CreateError(message: ErrorContexts, ...)
-	error(GetErrorContext(message, ...))
-end
-
-local function GetObjectCleanMethod(objectType, cleanMethod)
+local function GetObjectCleanMethod(objectType, cleanMethod): typeof(Error) | string
 	if objectType == 'function' then 
 		return objectType
 	elseif objectType == 'thread' then 
@@ -44,7 +70,11 @@ local function GetObjectCleanMethod(objectType, cleanMethod)
 	elseif objectType == 'RBXScriptConnection' then 
 		return 'Disconnect'
 	end
-	return CreateError('#cleanupMethod', objectType)
+	return error(Error.new({
+		Error = `Unable to get cleanup function for object type({objectType})`,
+		Trace = debug.traceback(nil, 0),
+		Type = Error.Type.CleanMethod
+	}), 0)
 end
 
 local function cleanupObject(object, cleanMethod)
@@ -61,7 +91,7 @@ local function findAndRemoveFromObjects(objects, tofind, RuncleanupMethod: boole
 	for key, obj in objects do
 		if obj[1] ~= tofind then continue end
 		table.remove(objects, key)
-		
+
 		if RuncleanupMethod then
 			cleanupObject(obj[1], obj[2])
 		end
@@ -85,11 +115,14 @@ Clove.__index = Clove
 	
 	Adds the given object to the cache ready to be cleaned up at any point.
 ]]
-function Clove:Add<T>(object: T, cleanupMethod: string?)
+function Clove:Add<T>(object: T, cleanupMethod: string?): T
 	if self._cleaning then 
-		CreateError('#cleaning')
+		return warn(Error.new({
+			Type = Error.Type.Cleaning,
+			Trace = debug.traceback(nil, 0)
+		}))
 	end
-	table.insert(self._objects, {object, GetObjectCleanMethod(type(object), cleanupMethod)})
+	table.insert(self._objects, {object, GetObjectCleanMethod(typeof(object), cleanupMethod), cleanupMethod})
 	return object
 end
 
@@ -99,14 +132,17 @@ end
 	                     :cleanMethod overwrites on all objects.
 	@return void
 	
-	Iterates through the objects & Adds them to the cache.
+	Iterates through the @objects & Adds them to the cache.
 ]]
 function Clove:BulkAdd<T>(objects: {T}, cleanMethod: string?)
 	if self._cleaning then 
-		CreateError('#cleaning')
+		return warn(Error.new({
+			Type = Error.Type.Cleaning,
+			Trace = debug.traceback(cleanMethod, 1)
+		}))
 	end
+
 	for _, obj in objects do
-		print(objects, obj)
 		self:Add(obj, cleanMethod)
 	end
 end
@@ -118,10 +154,12 @@ end
 	Iterates through the object cache until it finds the first instance
 	that equals to the @object & Runs cleanup method
 ]]
-
 function Clove:Remove<object>(object: object): boolean
 	if self._cleaning then 
-		CreateError('#cleaning') 
+		return warn(Error.new({
+			Trace = debug.traceback(nil, 1),
+			Type = Error.Type.Cleaning
+		}))
 	end
 	return findAndRemoveFromObjects(self._objects, object, true)
 end
@@ -132,10 +170,12 @@ end
 	
 	Clones the Instance & Adds it to the cache
 ]]
-
 function Clove:Clone<object>(instance: object & Instance): object
 	if self._cleaning then
-		CreateError('#cleaning') 
+		return warn(Error.new({
+			Trace = debug.traceback(nil, 1),
+			Type = Error.Type.Cleaning
+		}))
 	end
 	return self:Add(instance:Clone())
 end
@@ -146,10 +186,12 @@ end
 	@param function : The function to be Connected
 	@return @Signal
 ]]
-
 function Clove:Signal(signal, RBXCallSignal: 'Connect' | 'ConnectParallel' | string, fn: (...any) -> (...any)): RBXScriptConnection?
 	if self._cleaning then 
-		CreateError('#cleaning') 
+		return warn(Error.new({
+			Trace = debug.traceback(nil, 1),
+			Type = Error.Type.Cleaning
+		}))
 	end
 	return self:Add(signal[RBXCallSignal](signal, fn))
 end
@@ -163,19 +205,21 @@ end
 	
 	Easier way of Adding classes & functions 
 ]]
-
 function Clove:Construct<T>(class: T, cleanMethod: string?, ...)
 	if self._cleaning then
-		CreateError('#cleaning')
+		return warn(Error.new({
+			Trace = debug.traceback(nil, 1),
+			Type = Error.Type.Cleaning
+		}))
 	end
 	local classType = type(class)
-	
+
 	if classType == 'table' then
 		class = class.new(...)
 	elseif classType == 'function' then
 		class = class(...)
 	end
-	
+
 	return self:Add(class, cleanMethod) :: T
 end
 
@@ -185,16 +229,14 @@ end
 						@param Clove
 						Transfer: Removes Instances from param
 	@return void
-	Combinds another Clove objects together.
 	
-	CombindOptions
+	Combinds another Clove objects together.
 ]]
-
 function Clove:Combind(clove: typeof(Clove), CombindOptions: CombindOptions)
 	for _, val in clove._objects do
 		table.insert(self._objects, val)
 	end
-	
+
 	if CombindOptions.Transfer then
 		clove._objects = {}
 	end
@@ -206,15 +248,14 @@ end
 	Iterates through the cache, runs each of the objects cleanup method,
 	empties the cache.
 ]]
-
 function Clove:Clean()
 	if self._cleaning then return end
 	self._cleaning = true
-	
+
 	for _, obj in self._objects do
 		cleanupObject(obj[1], obj[2])
 	end
-	
+
 	table.clear(self._objects)
 	self._cleaning = nil
 end
@@ -225,6 +266,6 @@ return {
 		Constructs a Clove class.
 	]]
 	new = function()
-		return setmetatable({_objects = {}} :: {any}, Clove)
+		return setmetatable({_objects = {}}, Clove)
 	end,
 }
