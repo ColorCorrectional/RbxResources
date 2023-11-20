@@ -1,54 +1,50 @@
---!strict
-
 --[[
-	@func Enum
-	
-	StrictEnum & Enum work exactly the same way but with better checking if a Enum exists
-	or not with an error handler.
-	
+	Methods to create customized Enum's. These methods are 
+	syntactic sugar for a dictionary containing dictionaries containing
+	values Name, Value, and EnumType.
+
 	```lua
-		local kind = newEnum('Message', {'Info', 'Error', 'Warn'})
-		
-		kind.Info
-			>
-			.Name : member[i] ('Info')
-			.Value : members[i] (1)
-			.EnumType : name ('Message')
+	local kind = newEnum("Message", {"Info", "Error", "Warn"})
+	local types = newEnum("Types", {"Info", "Error", "Warn"})
+
+	if kind.Info ~= types.Info then
+		print("Different Enums.")
+	end
 	```
 ]]
 
-function newStrictEnum(name: string, members: {string})
-	local enum = {} 
+function newStrictEnum(name: string, members: { [number]: string })
+	local enum = table.create(#members)
 
-	for i, member in members do
+	for index, member in members do
 		enum[member] = {
 			Name = member,
-			Value = i,
+			Value = index,
 			EnumType = name
 		}
 	end
 
-	return setmetatable(enum, 
-		{
-			__index = function(_, key)
-				error(`{key} is not in {name}!`, 2)
-			end,
-			__newindex = function()
-				error(`Creating new members in {name} is not allowed!`, 2)
-			end,
-		})
+	return setmetatable(enum, {
+		__index = function(_, key)
+			error(`{key} is not in {name}!`, 2)
+		end,
+
+		__newindex = function()
+			error(`Creating new members in {name} is not allowed!`, 2)
+		end,
+	})
 end
 
-function newEnum(name: string, members: {string})
-	local enum = {}
-	
-	for i, member in members do
+function newEnum(name: string, members: { [number]: string })
+	local enum = table.create(#members)
+
+	for index, member in members do
 		enum[member] = {
 			Name = member,
-			Value = i,
+			Value = index,
 			EnumType = name
 		}
 	end
-	
-	return table.freeze(enum)
+
+	return enum
 end
