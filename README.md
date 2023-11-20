@@ -1,4 +1,3 @@
 # RbxProjects
 
-A collection of utility modules and functions.
-
+A collection of Lua/Luau methods, modules, and other utilities.
