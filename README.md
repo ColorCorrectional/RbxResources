@@ -1,3 +1,3 @@
-# RbxProjects
+# RbxResources
 
-A collection of Lua/Luau methods, modules, and other utilities.
+Resourceful modules that contain a class or individual methods.
